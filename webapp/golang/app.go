@@ -33,6 +33,7 @@ const (
 	postsPerPage  = 20
 	ISO8601Format = "2006-01-02T15:04:05-07:00"
 	UploadLimit   = 10 * 1024 * 1024 // 10mb
+	IMAGE_DIR     = "/home/isucon/private_isu/webapp/public/image/"
 )
 
 type User struct {
@@ -614,15 +615,19 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mime := ""
+	ext := ""
 	if file != nil {
 		// 投稿のContent-Typeからファイルのタイプを決定する
 		contentType := header.Header["Content-Type"][0]
 		if strings.Contains(contentType, "jpeg") {
 			mime = "image/jpeg"
+			ext = "jpg"
 		} else if strings.Contains(contentType, "png") {
 			mime = "image/png"
+			ext = "png"
 		} else if strings.Contains(contentType, "gif") {
 			mime = "image/gif"
+			ext = "gif"
 		} else {
 			session := getSession(r)
 			session.Values["notice"] = "投稿できる画像形式はjpgとpngとgifだけです"
@@ -653,7 +658,7 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 		query,
 		me.ID,
 		mime,
-		filedata,
+		"",
 		r.FormValue("body"),
 	)
 	if err != nil {
@@ -665,6 +670,16 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 		return
+	}
+
+	filename := IMAGE_DIR + fmt.Sprintf("%d", pid) + "." + ext
+	f, err := os.Create(filename)
+	if err != nil {
+		log.Fatalf("file create error")
+	}
+	_, err = f.Write(filedata)
+	if err != nil {
+		log.Fatalf("file write error")
 	}
 
 	http.Redirect(w, r, "/posts/"+strconv.FormatInt(pid, 10), http.StatusFound)
@@ -697,6 +712,16 @@ func getImage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		return
+	}
+
+	filename := IMAGE_DIR + fmt.Sprintf("%d", post.ID) + "." + ext
+	f, err := os.Create(filename)
+	if err != nil {
+		log.Fatalf("file create error")
+	}
+	_, err = f.Write(post.Imgdata)
+	if err != nil {
+		log.Fatalf("file write error")
 	}
 
 	w.WriteHeader(http.StatusNotFound)
