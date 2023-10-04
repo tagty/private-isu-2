@@ -1,6 +1,6 @@
 deploy:
 	ssh private-isu " \
-		cd /home/isucon; \
+		cd /home/isucon/private_isu; \
 		git checkout .; \
 		git fetch; \
 		git checkout $(BRANCH); \
