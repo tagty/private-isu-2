@@ -54,8 +54,9 @@ type Post struct {
 	CreatedAt    time.Time `db:"created_at"`
 	CommentCount int
 	Comments     []Comment
-	User         User
+	User         User `db:"user"`
 	CSRFToken    string
+	AccountName  string `db:"account_name"`
 }
 
 type Comment struct {
@@ -205,19 +206,9 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 
 		p.Comments = comments
 
-		err = db.Get(&p.User, "SELECT * FROM `users` WHERE `id` = ?", p.UserID)
-		if err != nil {
-			return nil, err
-		}
-
 		p.CSRFToken = csrfToken
 
-		if p.User.DelFlg == 0 {
-			posts = append(posts, p)
-		}
-		if len(posts) >= postsPerPage {
-			break
-		}
+		posts = append(posts, p)
 	}
 
 	return posts, nil
@@ -387,7 +378,25 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 
 	results := []Post{}
 
-	err := db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` ORDER BY `created_at` DESC")
+	err := db.Select(
+		&results,
+		`SELECT
+			p.id,
+			p.user_id,
+			p.body,
+			p.created_at,
+			p.mime,
+			u.account_name
+		FROM
+			posts AS p
+			JOIN users AS u ON p.user_id = u.id
+		WHERE
+			u.del_flg = 0
+		ORDER BY
+			p.created_at DESC
+		LIMIT ?;`,
+		postsPerPage,
+	)
 	if err != nil {
 		log.Print(err)
 		return
@@ -433,7 +442,27 @@ func getAccountName(w http.ResponseWriter, r *http.Request) {
 
 	results := []Post{}
 
-	err = db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` WHERE `user_id` = ? ORDER BY `created_at` DESC", user.ID)
+	err = db.Select(
+		&results,
+		`SELECT
+			p.id,
+			p.user_id,
+			p.body,
+			p.created_at,
+			p.mime,
+			u.account_name
+		FROM
+			posts AS p
+			JOIN users AS u ON p.user_id = u.id
+		WHERE
+			u.del_flg = 0
+			AND p.user_id = ?
+		ORDER BY
+			p.created_at DESC
+		LIMIT ?;`,
+		user.ID,
+		postsPerPage,
+	)
 	if err != nil {
 		log.Print(err)
 		return
@@ -521,7 +550,28 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	err = db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` WHERE `created_at` <= ? ORDER BY `created_at` DESC", t.Format(ISO8601Format))
+	err = db.Select(
+		&results,
+		`SELECT
+			p.id,
+			p.user_id,
+			p.body,
+			p.created_at,
+			p.mime,
+			u.account_name
+		FROM
+			posts AS p
+			JOIN users AS u ON p.user_id = u.id
+		WHERE
+			u.del_flg = 0
+			AND p.created_at <= ?
+		ORDER BY
+			p.created_at DESC
+		LIMIT ?;`,
+		t.Format(ISO8601Format),
+		postsPerPage,
+	)
+
 	if err != nil {
 		log.Print(err)
 		return
@@ -557,7 +607,27 @@ func getPostsID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	err = db.Select(&results, "SELECT * FROM `posts` WHERE `id` = ?", pid)
+	err = db.Select(
+		&results,
+		`SELECT
+			p.id,
+			p.user_id,
+			p.body,
+			p.created_at,
+			p.mime,
+			u.account_name
+		FROM
+			posts AS p
+			JOIN users AS u ON p.user_id = u.id
+		WHERE
+			u.del_flg = 0
+			AND p.id = ?
+		ORDER BY
+			p.created_at DESC
+		LIMIT ?;`,
+		pid,
+		postsPerPage,
+	)
 	if err != nil {
 		log.Print(err)
 		return
@@ -711,17 +781,18 @@ func getImage(w http.ResponseWriter, r *http.Request) {
 			log.Print(err)
 			return
 		}
-		return
-	}
 
-	filename := IMAGE_DIR + fmt.Sprintf("%d", post.ID) + "." + ext
-	f, err := os.Create(filename)
-	if err != nil {
-		log.Fatalf("file create error")
-	}
-	_, err = f.Write(post.Imgdata)
-	if err != nil {
-		log.Fatalf("file write error")
+		filename := IMAGE_DIR + fmt.Sprintf("%d", post.ID) + "." + ext
+		f, err := os.Create(filename)
+		if err != nil {
+			log.Fatalf("file create error")
+		}
+		_, err = f.Write(post.Imgdata)
+		if err != nil {
+			log.Fatalf("file write error")
+		}
+
+		return
 	}
 
 	w.WriteHeader(http.StatusNotFound)
