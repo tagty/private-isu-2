@@ -502,7 +502,7 @@ func getAccountName(w http.ResponseWriter, r *http.Request) {
 			p.mime,
 			u.account_name
 		FROM
-			posts AS p
+			posts AS p FORCE INDEX (posts_user_idx)
 			JOIN users AS u ON p.user_id = u.id
 		WHERE
 			u.del_flg = 0
